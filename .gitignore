@@ -6,3 +6,4 @@ test_ocr.py
 test_vision.py
 /data/processed
 /data/raw_pdfs
+.vscode
