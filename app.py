@@ -3,7 +3,8 @@ from PIL import Image
 import os
 
 # Import custom engines
-from src.engines.utils import convert_pdf_to_image, preprocess_image_for_ocr
+# --- CHANGED: Now importing 'load_input_as_image' instead of 'convert_pdf_to_image' ---
+from src.engines.utils import load_input_as_image, preprocess_image_for_ocr
 from src.engines.ocr import OCREngine
 from src.engines.llm import LLMEngine
 
@@ -39,10 +40,17 @@ st.caption("Conversational Assistant with Memory")
 # 1. SIDEBAR
 with st.sidebar:
     st.header("1. Upload Form")
-    uploaded_file = st.file_uploader("Choose a PDF", type=["pdf"])
+    # --- CHANGED: Allow image formats ---
+    uploaded_file = st.file_uploader("Choose a File", type=["pdf", "jpg", "jpeg", "png"])
     
     if uploaded_file is not None:
-        save_path = os.path.join("data", "raw_pdfs", "current_upload.pdf")
+        # --- CHANGED: Dynamically save with the correct file extension ---
+        file_ext = uploaded_file.name.split(".")[-1]
+        save_path = os.path.join("data", "raw_pdfs", f"current_upload.{file_ext}")
+        
+        # Ensure directory exists just in case
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
         with open(save_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
@@ -51,19 +59,24 @@ with st.sidebar:
             st.session_state.messages = []
             
             with st.spinner("Step 1: Vision Processing..."):
-                raw_img = convert_pdf_to_image(save_path)
-                clean_img = preprocess_image_for_ocr(raw_img)
-                st.session_state['current_image'] = clean_img
-            
-            with st.spinner("Step 2: OCR Extraction..."):
-                text_data = ocr_engine.get_raw_text(clean_img)
-                st.session_state['extracted_text'] = text_data
-            
-            with st.spinner("Step 3: Initial Analysis..."):
-                analysis = llm_engine.analyze_form(text_data)
-                st.session_state['form_analysis'] = analysis
-            
-            st.success("Processing Complete!")
+                # --- CHANGED: Use the unified loader that handles both PDFs and Images ---
+                raw_img = load_input_as_image(save_path)
+                
+                if raw_img:
+                    clean_img = preprocess_image_for_ocr(raw_img)
+                    st.session_state['current_image'] = clean_img
+                
+                    with st.spinner("Step 2: OCR Extraction..."):
+                        text_data = ocr_engine.get_raw_text(clean_img)
+                        st.session_state['extracted_text'] = text_data
+                    
+                    with st.spinner("Step 3: Initial Analysis..."):
+                        analysis = llm_engine.analyze_form(text_data)
+                        st.session_state['form_analysis'] = analysis
+                    
+                    st.success("Processing Complete!")
+                else:
+                    st.error("Failed to load the document. Please ensure it is a valid PDF or Image.")
 
 # 2. MAIN LAYOUT
 col1, col2 = st.columns([1, 1])
@@ -82,7 +95,7 @@ with col2:
     
     st.divider()
 
-    # --- CHAT INTERFACE (Reverted Version) ---
+    # --- CHAT INTERFACE ---
     st.markdown("### 💬 Chat with your Form Assistant")
     
     # Display previous chat messages
